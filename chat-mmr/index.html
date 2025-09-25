@@ -303,6 +303,10 @@
             margin-top: 5px;
         }
 
+        .hidden {
+            display: none;
+        }
+
         @media (max-width: 768px) {
             .container {
                 padding: 20px;
@@ -633,8 +637,12 @@
         function generateScript() {
             const teamLegacyUids = document.getElementById('teamLegacyUids').value.trim();
             const teamLegacyUidsError = document.getElementById('teamLegacyUidsError');
-            
+
+            // Hide/show sections based on legacyUids presence
+            const sectionsToToggle = document.querySelectorAll('.section + .section, .output-section');
+
             if (!teamLegacyUids) {
+                sectionsToToggle.forEach(section => section.classList.add('hidden'));
                 document.getElementById('rawScriptContent').textContent = 'Enter teamLegacyUids to generate script';
                 document.getElementById('chatScriptContent').textContent = 'Enter teamLegacyUids to generate script';
                 teamLegacyUidsError.textContent = '';
@@ -643,7 +651,8 @@
                 transformAndExecuteScript('');
                 return;
             }
-            
+
+            sectionsToToggle.forEach(section => section.classList.remove('hidden'));
             // Validate number of teamLegacyUids
             const teamLegacyUidArray = teamLegacyUids.split(',').map(uid => uid.trim()).filter(uid => uid);
             if (teamLegacyUidArray.length > 10) {
