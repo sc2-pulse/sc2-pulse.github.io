@@ -325,9 +325,9 @@
         <div class="section">
             <h2>Main</h2>
             <div class="input-group">
-                <label for="legacyUids">legacyUids from SC2Pulse:</label>
-                <input type="text" id="legacyUids" placeholder="Enter legacyUids (comma-separated)" required>
-                <div class="error" id="legacyUidsError"></div>
+                <label for="teamLegacyUids">teamLegacyUids from SC2Pulse:</label>
+                <input type="text" id="teamLegacyUids" placeholder="Enter teamLegacyUids (comma-separated)" required>
+                <div class="error" id="teamLegacyUidsError"></div>
             </div>
         </div>
 
@@ -388,7 +388,7 @@
                 Output preview is too long (over 500 characters). Nightbot will truncate messages longer than 500 characters.
             </div>
             <div class="output-preview" id="outputPreview">
-                Enter legacyUids to see output preview
+                Enter teamLegacyUids to see output preview
             </div>
         </div>
 
@@ -401,7 +401,7 @@
                 </div>
                 <div class="code-block" id="rawScript">
                     <button class="copy-btn" onclick="copyToClipboard('rawScript')">Copy</button>
-                    <span id="rawScriptContent">Enter legacyUids to generate script</span>
+                    <span id="rawScriptContent">Enter teamLegacyUids to generate script</span>
                 </div>
             </div>
             <div>
@@ -411,7 +411,7 @@
                 </div>
                 <div class="code-block" id="chatScript">
                     <button class="copy-btn" onclick="copyToClipboard('chatScript')">Copy</button>
-                    <span id="chatScriptContent">Enter legacyUids to generate script</span>
+                    <span id="chatScriptContent">Enter teamLegacyUids to generate script</span>
                 </div>
             </div>
         </div>
@@ -419,16 +419,16 @@
         <div class="footer">
             <h3>Information</h3>
             <p>
-                <strong>Getting legacyUids from SC2Pulse:</strong> To get team legacyUids, visit SC2Pulse and add teams to the buffer by clicking on the green plus button to the right side of each team. Once you have added all desired teams to the buffer, you can click on the tool icon, and click on the "Nightbot MMR command" option on the menu. Alternatively, you can click on the clipboard icon and click on the "legacyUid" option on the menu to copy the IDs to the clipboard.
+                <strong>Getting teamLegacyUids from SC2Pulse:</strong> To get team teamLegacyUids, visit SC2Pulse and add teams to the buffer by clicking on the green plus button to the right side of each team. Once you have added all desired teams to the buffer, you can click on the tool icon, and click on the "Nightbot MMR command" option on the menu. Alternatively, you can click on the clipboard icon and click on the "teamLegacyUid" option on the menu to copy the IDs to the clipboard.
             </p>
             <p>
                 <strong>API Limitations:</strong> This tool uses the SC2 Pulse API, which may lag behind actual in-game results, especially for lower-level teams. The data may not always reflect the most current standings.
             </p>
             <p>
-                <strong>Nightbot Character Limit:</strong> Nightbot has a 500-character limit for custom commands. If your generated script exceeds this limit, you'll need to reduce the number of options or legacyUids. The script will still be generated and displayed, but Nightbot will reject commands that are too long.
+                <strong>Nightbot Character Limit:</strong> Nightbot has a 500-character limit for custom commands. If your generated script exceeds this limit, you'll need to reduce the number of options or teamLegacyUids. The script will still be generated and displayed, but Nightbot will reject commands that are too long.
             </p>
             <p>
-                <strong>legacyUid Limit:</strong> This tool accepts a maximum of 10 legacyUids to prevent overly long commands and ensure reasonable response times.
+                <strong>teamLegacyUid Limit:</strong> This tool accepts a maximum of 10 teamLegacyUids to prevent overly long commands and ensure reasonable response times.
             </p>
         </div>
     </div>
@@ -439,11 +439,11 @@
 
         // Drag and drop functionality
         document.addEventListener('DOMContentLoaded', function() {
-            // Check for legacyUid query parameter
+            // Check for teamLegacyUid query parameter
             const urlParams = new URLSearchParams(window.location.search);
-            const legacyUid = urlParams.getAll('legacyUid')?.join(',');
-            if (legacyUid) {
-                document.getElementById('legacyUids').value = legacyUid;
+            const teamLegacyUid = urlParams.getAll('teamLegacyUid')?.join(',');
+            if (teamLegacyUid) {
+                document.getElementById('teamLegacyUids').value = teamLegacyUid;
             }
             
             const dataOptions = document.getElementById('dataOptions');
@@ -496,7 +496,7 @@
             });
 
             // Add event listeners for input changes
-            document.getElementById('legacyUids').addEventListener('input', generateScript);
+            document.getElementById('teamLegacyUids').addEventListener('input', generateScript);
             document.getElementById('sortBy').addEventListener('change', generateScript);
             document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
                 checkbox.addEventListener('change', generateScript);
@@ -560,8 +560,8 @@
             const outputPreview = document.getElementById('outputPreview');
             const outputPreviewWarning = document.getElementById('outputPreviewWarning');
             
-            if (!rawScript || rawScript === 'Enter legacyUids to generate script') {
-                outputPreview.textContent = 'Enter legacyUids to see output preview';
+            if (!rawScript || rawScript === 'Enter teamLegacyUids to generate script') {
+                outputPreview.textContent = 'Enter teamLegacyUids to see output preview';
                 outputPreview.className = 'output-preview';
                 outputPreviewWarning.style.display = 'none';
                 return;
@@ -626,34 +626,34 @@
         }
 
         function generateScript() {
-            const legacyUids = document.getElementById('legacyUids').value.trim();
-            const legacyUidsError = document.getElementById('legacyUidsError');
+            const teamLegacyUids = document.getElementById('teamLegacyUids').value.trim();
+            const teamLegacyUidsError = document.getElementById('teamLegacyUidsError');
             
-            if (!legacyUids) {
-                document.getElementById('rawScriptContent').textContent = 'Enter legacyUids to generate script';
-                document.getElementById('chatScriptContent').textContent = 'Enter legacyUids to generate script';
-                legacyUidsError.textContent = '';
+            if (!teamLegacyUids) {
+                document.getElementById('rawScriptContent').textContent = 'Enter teamLegacyUids to generate script';
+                document.getElementById('chatScriptContent').textContent = 'Enter teamLegacyUids to generate script';
+                teamLegacyUidsError.textContent = '';
                 document.getElementById('rawScriptWarning').style.display = 'none';
                 document.getElementById('chatScriptWarning').style.display = 'none';
                 transformAndExecuteScript('');
                 return;
             }
             
-            // Validate number of legacyUids
-            const legacyUidArray = legacyUids.split(',').map(uid => uid.trim()).filter(uid => uid);
-            if (legacyUidArray.length > 10) {
-                legacyUidsError.textContent = 'Maximum 10 legacyUids allowed. Please reduce the number of IDs.';
-                document.getElementById('rawScriptContent').textContent = 'Too many legacyUids provided';
-                document.getElementById('chatScriptContent').textContent = 'Too many legacyUids provided';
+            // Validate number of teamLegacyUids
+            const teamLegacyUidArray = teamLegacyUids.split(',').map(uid => uid.trim()).filter(uid => uid);
+            if (teamLegacyUidArray.length > 10) {
+                teamLegacyUidsError.textContent = 'Maximum 10 teamLegacyUids allowed. Please reduce the number of IDs.';
+                document.getElementById('rawScriptContent').textContent = 'Too many teamLegacyUids provided';
+                document.getElementById('chatScriptContent').textContent = 'Too many teamLegacyUids provided';
                 document.getElementById('rawScriptWarning').style.display = 'none';
                 document.getElementById('chatScriptWarning').style.display = 'none';
                 transformAndExecuteScript('');
                 return;
             }
 
-            legacyUidsError.textContent = '';
+            teamLegacyUidsError.textContent = '';
 
-            const url = `https://sc2pulse.nephest.com/sc2/api/teams?last=&teamLegacyUid=${encodeURIComponent(legacyUids)}`;
+            const url = `https://sc2pulse.nephest.com/sc2/api/teams?last=&teamLegacyUid=${encodeURIComponent(teamLegacyUids)}`;
             
             let script = `tt=$(urlfetch json ${url});`;
             
