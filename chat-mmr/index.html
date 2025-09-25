@@ -330,7 +330,7 @@
             <h2>Main</h2>
             <div class="input-group">
                 <label for="teamLegacyUids">teamLegacyUids from SC2Pulse:</label>
-                <input type="text" id="teamLegacyUids" placeholder="Enter teamLegacyUids (comma-separated)" required>
+                <input type="text" id="teamLegacyUids" placeholder="Enter teamLegacyUids (comma-separated)" required pattern="^(\d+-\d+-\d+-[^,]+)(,\d+-\d+-\d+-[^,]+)*$" title="Please enter valid teamLegacyUids separated by commas">
                 <div class="error" id="teamLegacyUidsError"></div>
             </div>
         </div>
@@ -635,13 +635,14 @@
         }
 
         function generateScript() {
-            const teamLegacyUids = document.getElementById('teamLegacyUids').value.trim();
+            const teamLegacyUidsInput = document.getElementById('teamLegacyUids');
+            const teamLegacyUids = teamLegacyUidsInput.value.trim();
             const teamLegacyUidsError = document.getElementById('teamLegacyUidsError');
 
             // Hide/show sections based on legacyUids presence
             const sectionsToToggle = document.querySelectorAll('.section + .section, .output-section');
 
-            if (!teamLegacyUids) {
+            if (!teamLegacyUids || !teamLegacyUidsInput.reportValidity()) {
                 sectionsToToggle.forEach(section => section.classList.add('hidden'));
                 document.getElementById('rawScriptContent').textContent = 'Enter teamLegacyUids to generate script';
                 document.getElementById('chatScriptContent').textContent = 'Enter teamLegacyUids to generate script';
