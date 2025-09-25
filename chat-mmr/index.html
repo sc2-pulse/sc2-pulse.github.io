@@ -556,7 +556,7 @@
             generateScript();
         }
 
-        function transformAndExecuteScript(rawScript) {
+        function transformAndExecuteScript(rawScript, callback) {
             const outputPreview = document.getElementById('outputPreview');
             const outputPreviewWarning = document.getElementById('outputPreviewWarning');
             
@@ -564,6 +564,7 @@
                 outputPreview.textContent = 'Enter teamLegacyUids to see output preview';
                 outputPreview.className = 'output-preview';
                 outputPreviewWarning.style.display = 'none';
+                if (callback) callback(false);
                 return;
             }
 
@@ -609,12 +610,15 @@
                         } else {
                             outputPreviewWarning.style.display = 'none';
                         }
+
+                        if (callback) callback(true);
                     })
                     .catch(error => {
                         console.error('Script execution error:', error);
                         outputPreview.textContent = `Error: ${error.message}`;
                         outputPreview.className = 'output-preview error';
                         outputPreviewWarning.style.display = 'none';
+                        if (callback) callback(false);
                     });
                     
             } catch (error) {
@@ -622,6 +626,7 @@
                 outputPreview.textContent = `Error: ${error.message}`;
                 outputPreview.className = 'output-preview error';
                 outputPreviewWarning.style.display = 'none';
+                if (callback) callback(false);
             }
         }
 
@@ -710,27 +715,35 @@
             const rawScript = `$(eval ${script})`;
             const chatScript = `!addcom !mmr ${rawScript}`;
             
-            // Check script lengths individually and show warnings
-            const rawScriptWarning = document.getElementById('rawScriptWarning');
-            const chatScriptWarning = document.getElementById('chatScriptWarning');
-            
-            if (rawScript.length > 500) {
-                rawScriptWarning.style.display = 'block';
-            } else {
-                rawScriptWarning.style.display = 'none';
-            }
-            
-            if (chatScript.length > 500) {
-                chatScriptWarning.style.display = 'block';
-            } else {
-                chatScriptWarning.style.display = 'none';
-            }
-            
-            document.getElementById('rawScriptContent').textContent = rawScript;
-            document.getElementById('chatScriptContent').textContent = chatScript;
-            
-            // Transform and execute the script for output preview
-            transformAndExecuteScript(rawScript);
+            // Transform and execute the script for output preview first to validate
+            transformAndExecuteScript(rawScript, function(success) {
+               if (success) {
+                   // Only show scripts if execution was successful
+                   const rawScriptWarning = document.getElementById('rawScriptWarning');
+                   const chatScriptWarning = document.getElementById('chatScriptWarning');
+
+                   if (rawScript.length > 500) {
+                       rawScriptWarning.style.display = 'block';
+                   } else {
+                       rawScriptWarning.style.display = 'none';
+                   }
+
+                   if (chatScript.length > 500) {
+                       chatScriptWarning.style.display = 'block';
+                   } else {
+                       chatScriptWarning.style.display = 'none';
+                   }
+
+                   document.getElementById('rawScriptContent').textContent = rawScript;
+                   document.getElementById('chatScriptContent').textContent = chatScript;
+               } else {
+                   // Hide scripts and warnings if execution failed
+                   document.getElementById('rawScriptWarning').style.display = 'none';
+                   document.getElementById('chatScriptWarning').style.display = 'none';
+                   document.getElementById('rawScriptContent').textContent = 'Script validation failed - see output preview for details';
+                   document.getElementById('chatScriptContent').textContent = 'Script validation failed - see output preview for details';
+               }
+            });
         }
 
         function copyToClipboard(elementId) {
