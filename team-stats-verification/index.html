@@ -1,0 +1,592 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>SC2 team stats verification</title>
+    <meta name="description" content="Verify SC2 team summaries from SC2 Pulse: enter teamLegacyUid(s), fetch characters and team history summaries, and validate games and ratings against numeric filters. Main teams are highlighted; alt teams are grouped under owners and can be toggled." />
+    <link rel="icon" type="image/png" sizes="128x128" href="https://sc2pulse.nephest.com/sc2/static/icon/misc/favicon-128.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="https://sc2pulse.nephest.com/sc2/static/icon/misc/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="https://sc2pulse.nephest.com/sc2/static/icon/misc/favicon-16.png" />
+    <link rel="icon" type="image/svg+xml" href="https://sc2pulse.nephest.com/sc2/static/icon/misc/pulse.svg" />
+    <style>
+        :root{ --bg:#f7fafc; --panel:#ffffff; --muted:#6b7280; --accent:#0f172a; --ok:#0bb07a; --err:#c9184a; --loading:#f59e0b; --ok-bg:rgba(11,176,122,0.28); --err-bg:rgba(201,24,74,0.28); font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
+        body{margin:16px;background:var(--bg);color:var(--accent);}
+        .container{max-width:1200px;margin:0 auto;padding:18px}
+        h1{font-size:20px;margin:0 0 12px;text-transform:none}
+        .filters{display:flex;flex-direction:column;gap:12px;background:var(--panel);padding:12px;border-radius:10px;box-shadow:0 1px 2px rgba(12,14,20,0.04)}
+        .group{display:flex;flex-wrap:wrap;gap:12px;padding:6px 0;border-top:1px solid #f1f5f9}
+        .group:first-of-type{border-top:none;padding-top:0}
+        .filter-group{display:flex;flex-direction:column;gap:6px;min-width:160px}
+        label{font-size:12px;color:var(--muted)}
+        input[type="text"], input[type="number"], input[type="datetime-local"], select{padding:8px;border-radius:8px;border:1px solid #e6e9ef;background:white}
+        .minmax{display:flex;gap:8px;align-items:center}
+        .minmax input{width:120px}
+        .queue{min-width:220px}
+        .controls-row{display:flex;gap:12px;align-items:end}
+
+        .status{display:flex;gap:12px;align-items:center;margin-top:12px}
+        .pill{padding:6px 10px;border-radius:999px;font-weight:600;font-size:13px}
+        .ok{background:var(--ok-bg);color:var(--ok)}
+        .err{background:var(--err-bg);color:var(--err)}
+        .loading{background:rgba(245,158,11,0.12);color:var(--loading)}
+
+        .tables{display:block;margin-top:16px}
+        .table-wrap{overflow:auto;border-radius:8px}
+        table{width:100%;min-width:980px;border-collapse:collapse;background:var(--panel);overflow:hidden}
+        thead th{background:#f1f5f9;text-align:left;padding:8px;cursor:pointer;font-size:13px;position:sticky;top:0}
+        tbody td{padding:8px;border-top:1px solid #f3f4f6;font-size:14px}
+        tbody tr:hover{background:#fbfdff}
+        .alt-row{background:#f8fafb;color:#334155}
+        .alt-games{color:#94a3b8}
+        .bold-violation{font-weight:700;color:var(--err)}
+        .tag-error{font-weight:700;color:var(--err)}
+        .race-icon{width:1.2em;height:1.2em;vertical-align:middle;margin-right:8px}
+        .small{font-size:12px;color:var(--muted)}
+        .rules{margin-top:18px;background:var(--panel);padding:12px;border-radius:10px}
+
+        /* left border differentiation */
+        tbody tr.main-row{border-left:0.4em solid #007bff}
+        tbody tr.alt-row{border-left:0.4em solid #6c757d}
+
+        @media (max-width:900px){
+          .filters{padding:8px}
+          .group{flex-direction:column}
+          .minmax input{width:100%}
+        }
+
+        .toggle-btn{background:none;border:1px solid #e6eef9;padding:4px 8px;border-radius:6px;cursor:pointer}
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>SC2 team stats verification</h1>
+
+    <div class="filters" id="filters">
+        <div class="group">
+            <div class="filter-group" style="flex:1">
+                <label>teamLegacyUid (comma separated)</label>
+                <input type="text" id="teamLegacyInput" placeholder="201-0-2-1.315071.3,201-0-2-1.5555." />
+                <div class="small">You can also add teams in SC2Pulse buffer and use the buffer tool to open 'Team stats verification'.</div>
+            </div>
+        </div>
+
+        <div class="group">
+            <div class="filter-group">
+                <label>Games (min / max)</label>
+                <div class="minmax">
+                    <input type="number" id="gamesMin" placeholder="min" />
+                    <input type="number" id="gamesMax" placeholder="max" />
+                </div>
+            </div>
+
+            <div class="filter-group">
+                <label>Rating Last (min / max)</label>
+                <div class="minmax">
+                    <input type="number" id="lastMin" placeholder="min" />
+                    <input type="number" id="lastMax" placeholder="max" />
+                </div>
+            </div>
+
+            <div class="filter-group">
+                <label>Rating Avg (min / max)</label>
+                <div class="minmax">
+                    <input type="number" id="avgMin" placeholder="min" />
+                    <input type="number" id="avgMax" placeholder="max" />
+                </div>
+            </div>
+
+            <div class="filter-group">
+                <label>Rating Max (min / max)</label>
+                <div class="minmax">
+                    <input type="number" id="maxMin" placeholder="min" />
+                    <input type="number" id="maxMax" placeholder="max" />
+                </div>
+            </div>
+        </div>
+
+        <div class="group">
+            <div class="filter-group">
+                <label>From (datetime)</label>
+                <input type="datetime-local" id="from" />
+            </div>
+            <div class="filter-group">
+                <label>Timezone offset (hours)</label>
+                <input type="number" id="tzOffset" placeholder="e.g. 1 or -5" min="-12" max="14" />
+            </div>
+            <div class="filter-group">
+                <label>Depth (days)</label>
+                <input type="number" id="depth" placeholder="days" min="1" />
+            </div>
+        </div>
+
+        <div class="group">
+            <div class="filter-group queue">
+                <label>Queue</label>
+                <select id="queue" multiple size="4">
+                    <option value="201" selected>1v1 / 201</option>
+                    <option value="202">2v2 / 202</option>
+                    <option value="203">3v3 / 203</option>
+                    <option value="204">4v4 / 204</option>
+                </select>
+                <div class="small">Hold Ctrl/Cmd to select multiple</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="status">
+        <div id="stateIndicator" class="pill small">Idle</div>
+        <div id="okErr" class="pill small">No status</div>
+    </div>
+
+    <div class="tables">
+        <h3 style="margin:8px 0">Results</h3>
+        <div class="table-wrap">
+            <table id="mainTable">
+                <thead>
+                <tr>
+                    <th data-key="mode">Mode</th>
+                    <th data-key="region">Region</th>
+                    <th data-key="tag">Character</th>
+                    <th data-key="race">Race</th>
+                    <th data-key="GAMES">Games</th>
+                    <th data-key="RATING_LAST">Last Rating</th>
+                    <th data-key="RATING_AVG">Average Rating</th>
+                    <th data-key="RATING_MAX">Max Rating</th>
+                    <th data-key="toggle">Alt</th>
+                </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="rules" id="rules">
+        <h3>Rules</h3>
+        <div class="small">
+            <ol>
+                <li>Open this page with one or more <code>teamLegacyUid</code> in the URL query. Example: <code>?teamLegacyUid=201-0-2-1.315071.3</code> or multiple params.</li>
+                <li>Instead of adding query parameters manually, you can use the SC2Pulse buffer UI: visit SC2Pulse, add teams to the buffer using the green plus button next to each team, then open the buffer (tool buffer icon) and choose "Team stats verification".</li>
+                <li>The page converts provided legacy IDs to toon handles and retrieves character and team summary data from the SC2Pulse API.</li>
+                <li>Only solo queues are supported. If any provided legacy UID doesn't use the supported formats (201-0,202-1,203-1,204-1) the process stops with an error.</li>
+                <li>Results show main rows for summaries that exactly match provided legacy UIDs. Each main row can be expanded to reveal alt rows (other summaries/teams for the same account). Alt rows are grayed and their Games column is not verified; note that alt rows only have their MAX constraints verified — min constraints are ignored for alts.</li>
+                <li>Numeric filters verify results. Violations are highlighted in red and reported as errors. If a row has any verification error its character tag is shown in bold red.</li>
+                <li>All filters reflect URL query parameters and update them when changed. Changing filters re-runs the workflow immediately (sorting only reorders data).</li>
+                <li>The data is pulled from <a href="https://sc2pulse.nephest.com/sc2" target="_blank" rel="noopener">SC2 Pulse</a> API.</li>
+            </ol>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Short helpers
+    const $ = (sel, ctx=document)=>ctx.querySelector(sel);
+    const $$ = (sel, ctx=document)=>Array.from(ctx.querySelectorAll(sel));
+
+    // Serial executor so retriggers are queued and run in order
+    let serialChain = Promise.resolve();
+    function enqueue(fn){
+      serialChain = serialChain.then(()=>fn()).catch(()=>{});
+      return serialChain;
+    }
+
+    const STATE = {
+      baseApi: 'https://sc2pulse.nephest.com/sc2/api',
+      el: { state: null, okErr: null, mainTable: null },
+      data: { rows: [], mainRows: [] },
+      SORT: { key: 'RATING_LAST', dir: -1 }
+    };
+
+    // Debounce scheduler for runWorkflow to avoid enqueuing many retriggers while user is editing
+    let _debounceRunTimer = null;
+    function scheduleRunWorkflowDebounced(delayMs = 1000){
+      if(_debounceRunTimer) clearTimeout(_debounceRunTimer);
+      _debounceRunTimer = setTimeout(()=>{ _debounceRunTimer = null; enqueue(()=>runWorkflow()); }, delayMs);
+    }
+
+
+    function setStateText(text, cls=''){ const s=STATE.el.state; if(!s) return; s.textContent=text; s.className='pill small ' + (cls||''); }
+    function setOkErr(text, ok=true){ const e=STATE.el.okErr; if(!e) return; e.textContent=text; e.className='pill small ' + (ok? 'ok':'err'); }
+
+    // Query params helpers
+    function getAllTeamLegacyFromUrl(){
+      const p = new URLSearchParams(window.location.search);
+      const arr = p.getAll('teamLegacyUid') || [];
+      return arr.flatMap(v => v.split(',').map(s=>s.trim()).filter(Boolean));
+    }
+
+    function setTeamLegacyParamFromInput(){
+      const txt = document.getElementById('teamLegacyInput').value || '';
+      const parts = txt.split(',').map(s=>s.trim()).filter(Boolean);
+      const p = new URLSearchParams(window.location.search);
+      p.delete('teamLegacyUid');
+      for(const v of parts) p.append('teamLegacyUid', v);
+      history.replaceState(null,'',window.location.pathname+'?'+p.toString());
+    }
+
+    function setInputFromTeamLegacyParam(){ const vals = getAllTeamLegacyFromUrl(); document.getElementById('teamLegacyInput').value = vals.join(','); }
+
+    function updateQueryParam(key, value){ const p = new URLSearchParams(window.location.search); if(value==null || value==='') p.delete(key); else p.set(key,value); history.replaceState(null,'',window.location.pathname+'?'+p.toString()); }
+
+    // Read UI filters
+    function readFiltersFromUI(){
+      const get = id => document.getElementById(id).value;
+      const queues = Array.from(document.getElementById('queue').selectedOptions).map(o=>o.value);
+      return {
+        queues,
+        gamesMin: maybeNum(get('gamesMin')),
+        gamesMax: maybeNum(get('gamesMax')),
+        lastMin: maybeNum(get('lastMin')),
+        lastMax: maybeNum(get('lastMax')),
+        avgMin: maybeNum(get('avgMin')),
+        avgMax: maybeNum(get('avgMax')),
+        maxMin: maybeNum(get('maxMin')),
+        maxMax: maybeNum(get('maxMax')),
+        from: get('from') || null,
+        tzOffset: maybeNum(get('tzOffset')),
+        depth: maybeNum(get('depth'))
+      };
+    }
+    function maybeNum(v){ return v===''||v==null?null:Number(v); }
+
+    // Input parsing
+    function parseProvidedLegacyUids(){ return getAllTeamLegacyFromUrl(); }
+
+    // Strict validation of full teamLegacyUid format
+    // Format: queueId-teamTypeId-regionId-memberRealm.memberBnetId.memberRaceId
+    // Race is optional (may be empty) but the trailing dot must be present when empty
+    function validateLegacyFormat(uids){
+      if(!uids || uids.length===0) return { ok:false, message:'No teamLegacyUid provided in URL' };
+      for(const u of uids){
+        const parts = u.split('-');
+        if(parts.length < 4) return { ok:false, message:`Legacy UID "${u}" is not in the expected format` };
+        const queue = parts[0]; const teamType = parts[1];
+        if(!['201','202','203','204'].includes(queue)) return { ok:false, message:`Legacy UID "${u}" has invalid queue` };
+        if(queue==='201' && teamType!=='0') return { ok:false, message:`Legacy UID "${u}" has invalid team type for 201 (expected 0)` };
+        if(queue!=='201' && teamType!=='1') return { ok:false, message:`Legacy UID "${u}" has invalid team type (expected 1 for non-201)` };
+        const legacyId = parts.slice(3).join('-');
+        const segs = legacyId.split('.');
+        if(segs.length < 2) return { ok:false, message:`Legacy UID "${u}" missing realm or battlenet id` };
+        // require trailing dot (empty race) or a race segment -> segs.length >= 3
+        if(segs.length < 3) return { ok:false, message:`Legacy UID "${u}" must contain a trailing dot for empty race or a race segment (e.g. 1.5555.)` };
+        const realm = segs[0], bnet = segs[1];
+        if(String(Number(realm)) !== realm) return { ok:false, message:`Invalid realm in "${u}"` };
+        if(String(Number(bnet)) !== bnet) return { ok:false, message:`Invalid battlenet id in "${u}"` };
+        const last = segs[2];
+        if(last !== '' && last !== '*' && String(Number(last)) !== last) return { ok:false, message:`Invalid race segment in "${u}"` };
+      }
+      return { ok:true };
+    }
+
+    // Conversions and helpers
+    function legacyToToonHandle(legacy){ const parts = legacy.split('-'); if(parts.length<4) return null; const regionId = parts[2]; const legacyId = parts.slice(3).join('-'); const [realm, bnetId] = legacyId.split('.'); if(!realm || !bnetId) return null; return `${regionId}-S2-${realm}-${bnetId}`; }
+
+    function regionStrToId(regionStr){ if(!regionStr) return null; const m = regionStr.toUpperCase(); if(m==='US') return 1; if(m==='EU') return 2; if(m==='KR') return 3; if(m==='CN') return 5; return null; }
+    function regionToFlagEmoji(region){ if(!region) return '🏳️'; const r = region.toUpperCase(); if(r==='US') return '🇺🇸'; if(r==='EU') return '🇪🇺'; if(r==='KR') return '🇰🇷'; if(r==='CN') return '🇨🇳'; return '🏳️'; }
+    function queueIdToModeLabel(q){ if(q==='201') return '1v1'; if(q==='202') return '2v2'; if(q==='203') return '3v3'; if(q==='204') return '4v4'; return q; }
+
+    // Race extraction from a *teamLegacyUid* (explicit per-team)
+    // If race segment is missing or '*' -> return empty string (no race shown)
+    // Numeric mapping: 1=Terran,2=Protoss,3=Zerg,4=Random
+    function raceFromLegacy(legacy){
+      if(!legacy) return '';
+      const parts = legacy.split('-'); if(parts.length<4) return '';
+      const legacyId = parts.slice(3).join('-');
+      const segs = legacyId.split('.');
+      const last = segs[segs.length-1];
+      if(last === undefined || last === '' || last === '*') return '';
+      const n = Number(last);
+      if(!Number.isNaN(n)){
+        if(n===1) return 'Terran';
+        if(n===2) return 'Protoss';
+        if(n===3) return 'Zerg';
+        if(n===4) return 'Random';
+        return '';
+      }
+      const low = String(last).toLowerCase();
+      if(low.includes('terran')) return 'Terran';
+      if(low.includes('protoss')) return 'Protoss';
+      if(low.includes('zerg')) return 'Zerg';
+      if(low.includes('random')) return 'Random';
+      return '';
+    }
+
+    function characterToLegacyForQueue(char, queueId, teamType){ const realm = char.members.character.realm; const battlenetId = char.members.character.battlenetId; const regionStr = char.members.character.region; const regionId = regionStrToId(regionStr); return `${queueId}-${teamType}-${regionId}-${realm}.${battlenetId}.*`; }
+
+    // Dynamic rate limiting based on API response header 'RateLimit-Limit' (requests per second).
+    // Default to 4 rps (250ms) until header is observed.
+    if(!window.__sc2_rate_limiter){
+      window.__sc2_rate_limiter = {
+        RATE_MS: 250,
+        _lastRequestTime: 0,
+        updateRateFromHeader: function(requestsPerSecond){
+          try{
+            const n = Number(requestsPerSecond);
+            if(Number.isFinite(n) && n > 0){
+              this.RATE_MS = Math.max(1, Math.floor(1000 / n));
+            }
+          }catch(e){ /* ignore */ }
+        },
+        awaitRateSlot: async function(){
+          const now = Date.now();
+          const wait = Math.max(0, this.RATE_MS - (now - this._lastRequestTime));
+          if(wait > 0){
+            await new Promise(r => setTimeout(r, wait));
+          }
+          this._lastRequestTime = Date.now();
+        }
+      };
+    }
+
+    async function fetchWithTimeout(url, opts={}, timeout=60000){
+      // Use the shared rate limiter on window.__sc2_rate_limiter
+      await window.__sc2_rate_limiter.awaitRateSlot();
+      const controller = new AbortController();
+      const id = setTimeout(()=>controller.abort(), timeout);
+      try{
+        const res = await fetch(url, {...opts, signal: controller.signal});
+        clearTimeout(id);
+        if(!res.ok) throw new Error('HTTP '+res.status+' '+res.statusText);
+
+        // Attempt to read rate limit header (common names)
+        try{
+          const header = res.headers.get('RateLimit-Limit') || res.headers.get('ratelimit-limit') || res.headers.get('X-RateLimit-Limit') || res.headers.get('x-ratelimit-limit');
+          if(header){
+            // header is limit per second (e.g. "4")
+            window.__sc2_rate_limiter.updateRateFromHeader(header);
+          }
+        }catch(e){ /* ignore header parsing errors */ }
+
+        return res.json();
+      }catch(e){
+        clearTimeout(id);
+        throw e;
+      }
+    }
+
+    async function sequentialBatches(items, batchSize, buildUrlFn, description){ const results=[]; const totalBatches = Math.ceil(items.length / batchSize) || 0; for(let i=0;i<items.length;i+=batchSize){ const batch = items.slice(i,i+batchSize); const url = buildUrlFn(batch); setStateText(`${description} (batch ${Math.floor(i/batchSize)+1}/${totalBatches})`, 'loading'); const data = await fetchWithTimeout(url); results.push(...(data || [])); } return results; }
+
+    // Global date helpers
+    function pad(n){ return String(n).padStart(2,'0'); }
+    function formatWithOffset(dateObj, offsetHours){
+      const offsetMinutes = Math.round(Number(offsetHours || 0) * 60);
+      const targetMs = dateObj.getTime() + offsetMinutes*60*1000;
+      const d = new Date(targetMs);
+      const YYYY = d.getUTCFullYear(); const MM = pad(d.getUTCMonth()+1); const DD = pad(d.getUTCDate());
+      const hh = pad(d.getUTCHours()); const mm = pad(d.getUTCMinutes()); const ss = pad(d.getUTCSeconds());
+      const sign = offsetMinutes>=0?'+':'-'; const absMin = Math.abs(offsetMinutes); const offH = pad(Math.floor(absMin/60)); const offM = pad(absMin%60);
+      return `${YYYY}-${MM}-${DD}T${hh}:${mm}:${ss}${sign}${offH}:${offM}`;
+    }
+    function parseDateTimeLocalWithOffset(dtLocalStr, offsetHours){
+      if(!dtLocalStr) return new Date();
+      const [datePart, timePart] = dtLocalStr.split('T');
+      if(!datePart || !timePart) return new Date(dtLocalStr);
+      const [year,month,day] = datePart.split('-').map(Number);
+      const timeSegs = timePart.split(':').map(Number);
+      const hour = timeSegs[0]||0; const minute = timeSegs[1]||0; const second = timeSegs[2]||0;
+      // Build UTC ms from the provided local components, then subtract the provided offset to get true UTC instant
+      const utcMs = Date.UTC(year, month-1, day, hour, minute, second) - Math.round(Number(offsetHours || 0)*3600*1000);
+      return new Date(utcMs);
+    }
+
+    const TZ_MIN = -12, TZ_MAX = 14, DEPTH_MIN = 1;
+    // Validation for tzOffset and depth constraints. Returns {ok:boolean, message:string|null}
+    function validateTzDepthInputs(){
+      const tzVal = document.getElementById('tzOffset').value;
+      const depthVal = document.getElementById('depth').value;
+      if(tzVal !== ''){
+        const n = Number(tzVal);
+        if(Number.isNaN(n) || n < TZ_MIN || n > TZ_MAX){
+          return { ok:false, message:`Timezone offset must be between ${TZ_MIN} and ${TZ_MAX}` };
+        }
+      }
+      if(depthVal !== ''){
+        const d = Number(depthVal);
+        if(Number.isNaN(d) || d < DEPTH_MIN){
+          return { ok:false, message:`Depth must be at least ${DEPTH_MIN}` };
+        }
+      }
+      return { ok:true, message:null };
+    }
+
+    // Global verification helper used by rendering
+    function checkViolationsGlobal(row, isAlt=false){
+      const filters = readFiltersFromUI();
+      const violations = {GAMES:false, RATING_LAST:false, RATING_AVG:false, RATING_MAX:false};
+      const s = row.summary || {GAMES:null,RATING_LAST:null,RATING_AVG:null,RATING_MAX:null};
+      if(!isAlt){
+        if(filters.gamesMin!=null && s.GAMES!=null && s.GAMES < filters.gamesMin) violations.GAMES=true;
+        if(filters.gamesMax!=null && s.GAMES!=null && s.GAMES > filters.gamesMax) violations.GAMES=true;
+      }
+      // For alt rows: do NOT verify games at all (neither min nor max)
+      if(filters.lastMin!=null && !isAlt && s.RATING_LAST!=null && s.RATING_LAST < filters.lastMin) violations.RATING_LAST=true;
+      if(filters.lastMax!=null && s.RATING_LAST!=null && s.RATING_LAST > filters.lastMax) violations.RATING_LAST=true;
+      if(filters.avgMin!=null && !isAlt && s.RATING_AVG!=null && s.RATING_AVG < filters.avgMin) violations.RATING_AVG=true;
+      if(filters.avgMax!=null && s.RATING_AVG!=null && s.RATING_AVG > filters.avgMax) violations.RATING_AVG=true;
+      if(filters.maxMin!=null && !isAlt && s.RATING_MAX!=null && s.RATING_MAX < filters.maxMin) violations.RATING_MAX=true;
+      if(filters.maxMax!=null && s.RATING_MAX!=null && s.RATING_MAX > filters.maxMax) violations.RATING_MAX=true;
+      return violations;
+    }
+
+
+    async function runWorkflow(){
+      try{
+        setOkErr('');
+        // New guard: don't run workflow if tz/depth constraints are violated
+        const v = validateTzDepthInputs();
+        if(!v.ok){
+          setStateText('Invalid inputs','err');
+          setOkErr(v.message, false);
+          return;
+        }
+        setOkErr('');
+        // ensure teamLegacy input values are synced to URL params before processing
+        setTeamLegacyParamFromInput();
+
+        const provided = parseProvidedLegacyUids();
+        const vFormat = validateLegacyFormat(provided);
+        if(!vFormat.ok){ setStateText('Error','err'); setOkErr(vFormat.message,false); return; }
+
+        setStateText('Converting provided legacy UIDs');
+        const toonHandles = provided.map(legacyToToonHandle).filter(Boolean);
+        if(toonHandles.length===0){ setStateText('Error','err'); setOkErr('Could not convert provided legacy uids',false); return; }
+
+        setStateText('Fetching characters by toonHandle');
+        const chars = await sequentialBatches(toonHandles, 500, (batch)=>`${STATE.baseApi}/characters?toonHandle=${batch.join(',')}`, 'Characters by toonHandle');
+
+        const accountIds = Array.from(new Set(chars.map(c=>c.members.account.id))).filter(Boolean);
+        if(accountIds.length===0){ setStateText('Error','err'); setOkErr('No account IDs found from characters',false); return; }
+
+        setStateText('Fetching characters for accountIds');
+        const allChars = await sequentialBatches(accountIds, 125, (batch)=>`${STATE.baseApi}/characters?accountId=${batch.join(',')}`, 'Characters by accountId');
+
+        const filters = readFiltersFromUI();
+        const selectedQueues = filters.queues.length?filters.queues:['201'];
+        const teamTypeForQueue = q => q==='201'?0:1;
+        const teamLegacyForChar = (char)=>{ const out=[]; for(const q of selectedQueues){ out.push(characterToLegacyForQueue(char, q, teamTypeForQueue(q))); } return out; };
+
+        let summaryLegacyUids = Array.from(new Set(allChars.flatMap(c=>teamLegacyForChar(c))));
+        if(summaryLegacyUids.length===0){ setStateText('Error','err'); setOkErr('No summary teamLegacyUids could be derived', false); return; }
+
+        setStateText('Fetching team summaries');
+        const summaryQueryParts = ['summary=GAMES','summary=RATING_AVG','summary=RATING_MAX','summary=RATING_LAST','static=LEGACY_UID','groupBy=LEGACY_UID'];
+        let toDateObj = null;
+        if(filters.from){ const offset = (filters.tzOffset==null)?0:filters.tzOffset; toDateObj = parseDateTimeLocalWithOffset(filters.from, offset); const iso = formatWithOffset(toDateObj, offset); summaryQueryParts.push('to='+encodeURIComponent(iso)); }
+        if(filters.depth!=null){ const base = toDateObj || new Date(); const fromDate = new Date(base.getTime() - filters.depth*24*60*60*1000); const offset = (filters.tzOffset==null)?0:filters.tzOffset; const isoFrom = formatWithOffset(fromDate, offset); summaryQueryParts.push('from='+encodeURIComponent(isoFrom)); }
+
+        const summariesRaw = [];
+        const totalBatch = Math.ceil(summaryLegacyUids.length / 10);
+        for(let i=0;i<summaryLegacyUids.length;i+=10){ const batch = summaryLegacyUids.slice(i,i+10); const params = summaryQueryParts.join('&') + '&' + batch.map(u=>'teamLegacyUid='+encodeURIComponent(u)).join('&'); const url = `${STATE.baseApi}/team-history-summaries?${params}`; setStateText(`Fetching summaries (${Math.floor(i/10)+1}/${totalBatch})`, 'loading'); const resp = await fetchWithTimeout(url); summariesRaw.push(...(resp || [])); }
+
+        setStateText('Linking characters with summaries');
+        const summariesByLegacy = {};
+        for(const s of summariesRaw){ const key = s.staticData && s.staticData.LEGACY_UID; if(key) summariesByLegacy[key]=s.summary; }
+        // Ensure all provided main teamLegacyUid parameters have a summary entry. If missing, create a zero-valued summary so they appear as mains.
+        for(const p of provided){ if(!summariesByLegacy[p]){ summariesByLegacy[p] = { GAMES:0, RATING_AVG:0, RATING_MAX:0, RATING_LAST:0 }; } }
+
+        // Build rows: every summary becomes its own row (character x legacy)
+        const rows = [];
+        for(const ch of allChars){
+          const realm = String(ch.members.character.realm); const bnet = String(ch.members.character.battlenetId); const charRegionId = String(regionStrToId(ch.members.character.region));
+          const legacyMatches = Object.keys(summariesByLegacy).filter(k => {
+            const parts = k.split('-');
+            const reg = parts[2];
+            const legacyId = parts.slice(3).join('-');
+            return String(reg) === charRegionId && legacyId.startsWith(`${realm}.${bnet}.`);
+          });
+          if(legacyMatches.length===0){
+            rows.push({ characterId: ch.members.character.id, tag: ch.members.character.tag || String(ch.members.character.id), race: inferRace(ch), legacyMatches: [], summary: null, staticLegacy: null, accountId: ch.members.account.id, region: ch.members.character.region || '' });
+          } else {
+            for(const legacy of legacyMatches){ const summary = summariesByLegacy[legacy] || null; const race = raceFromLegacy(legacy); rows.push({ characterId: ch.members.character.id, tag: ch.members.character.tag || String(ch.members.character.id), race, legacyMatches: [legacy], summary, staticLegacy: legacy, accountId: ch.members.account.id, region: ch.members.character.region || '' }); }
+          }
+        }
+
+        // Determine main rows: exact matches with provided teamLegacyUid
+        const providedSet = new Set(provided);
+        const mainRows = rows.filter(r => r.staticLegacy && providedSet.has(r.staticLegacy));
+
+        // If provided legacy exists but no matching character produced a row (edge case), create a placeholder main row so user sees it
+        for(const p of provided){ if(!rows.some(r=>r.staticLegacy===p)){
+            rows.push({ characterId: null, tag: '', race: raceFromLegacy(p), legacyMatches:[p], summary: summariesByLegacy[p] || {GAMES:0,RATING_AVG:0,RATING_MAX:0,RATING_LAST:0}, staticLegacy: p, accountId: `missing-${p}`, region: '' });
+          } }
+
+        STATE.data.rows = rows; STATE.data.mainRows = mainRows;
+
+        renderTable();
+
+        const anyViolations = rows.some(r=>{ const isAlt = !mainRows.includes(r); const v = checkViolationsGlobal(r,isAlt); return Object.values(v).some(Boolean); });
+        if(anyViolations){ setOkErr('Verification errors found', false); setStateText('Completed with errors','err'); }
+        else { setOkErr('OK', true); setStateText('Completed','ok'); }
+
+      }catch(err){ console.error(err); setStateText('Error','err'); setOkErr(err.message || String(err), false); }
+    }
+
+    // inferRace from character data (fallback, not used for per-team race)
+    function inferRace(ch){ const rg = (ch.members && ch.members.raceGames) || {}; const keys = Object.keys(rg); if(keys.includes('TERRAN')) return 'Terran'; if(keys.includes('ZERG')) return 'Zerg'; if(keys.includes('PROTOSS')) return 'Protoss'; return 'Random'; }
+
+    function raceIconSrc(r){ if(!r) return ''; const low = r.toLowerCase(); if(low.includes('terran')) return 'https://sc2pulse.nephest.com/sc2/static/icon/race/terran.svg'; if(low.includes('protoss')) return 'https://sc2pulse.nephest.com/sc2/static/icon/race/protoss.svg'; if(low.includes('zerg')) return 'https://sc2pulse.nephest.com/sc2/static/icon/race/zerg.svg'; if(low.includes('random')) return 'https://sc2pulse.nephest.com/sc2/static/icon/race/random.svg'; return ''; }
+
+    // Sorting and rendering (sorting does NOT retrigger workflow)
+    function sortAndRender(){ const key = STATE.SORT.key; const dir = STATE.SORT.dir; const main = STATE.data.mainRows.slice(); const compare = (a,b)=>{ const va = getSortVal(a,key); const vb = getSortVal(b,key); if(va==null && vb==null) return 0; if(va==null) return 1; if(vb==null) return -1; if(typeof va === 'number' && typeof vb === 'number') return va - vb; return String(va).localeCompare(String(vb)); } ; main.sort((a,b)=> dir * compare(a,b)); const tbody = $('#mainTable tbody'); tbody.innerHTML=''; for(const m of main){ const alts = STATE.data.rows.filter(r => r.staticLegacy !== m.staticLegacy && r.accountId === m.accountId); const hasAlts = alts.length>0; const trMain = buildMainRow(m, hasAlts); tbody.appendChild(trMain); // Alt group: include rows for same account except the main itself (grouped under this main)
+      alts.sort((a,b)=> dir * compare(a,b)); const ownerKey = `owner-${encodeURIComponent(m.staticLegacy || (m.accountId+'-'+m.characterId))}`; for(const alt of alts){ const altTr = buildAltRow(alt, m, ownerKey); tbody.appendChild(altTr); } } }
+
+    function getSortVal(item,key){ if(!item) return null; if(key==='tag') return item.tag || null; if(key==='race') return item.race || null; if(item.summary && item.summary[key] != null) return item.summary[key]; if(key==='mode') return item.staticLegacy? queueIdToModeLabel(item.staticLegacy.split('-')[0]) : null; if(key==='region') return item.region || null; return null; }
+
+    function renderTable(){ sortAndRender(); }
+
+    function buildMainRow(m, hasAlts=false){ const tr = document.createElement('tr'); tr.className='main-row'; tr.dataset.account = m.accountId; tr.dataset.legacy = m.staticLegacy || '';
+      const violations = checkViolationsGlobal(m, false);
+      const tdMode = document.createElement('td'); tdMode.textContent = m.staticLegacy? queueIdToModeLabel(m.staticLegacy.split('-')[0]) : ''; tr.appendChild(tdMode);
+      const tdRegion = document.createElement('td'); tdRegion.textContent = regionToFlagEmoji(m.region); tr.appendChild(tdRegion);
+      const tdTag = document.createElement('td'); const a = document.createElement('a'); a.textContent = m.tag || (m.characterId? String(m.characterId): ''); if(m.characterId){ a.href = `https://sc2pulse.nephest.com/sc2/?type=character&id=${m.characterId}&m=1`; a.target='_blank'; a.rel='noopener'; }
+      if(Object.values(violations).some(Boolean)) a.className='tag-error'; tdTag.appendChild(a); tr.appendChild(tdTag);
+      const tdRace = document.createElement('td'); const raceSrc = raceIconSrc(m.race); if(raceSrc){ const img = document.createElement('img'); img.className='race-icon'; img.src = raceSrc; img.alt = m.race; tdRace.appendChild(img); } tdRace.appendChild(document.createTextNode(m.race || '')); tr.appendChild(tdRace);
+      const tdGames = document.createElement('td'); tdGames.textContent = m.summary && m.summary.GAMES!=null? m.summary.GAMES : '—'; if(violations.GAMES) tdGames.className='bold-violation'; tr.appendChild(tdGames);
+      const tdLast = document.createElement('td'); tdLast.textContent = m.summary && m.summary.RATING_LAST!=null? m.summary.RATING_LAST : '—'; if(violations.RATING_LAST) tdLast.className='bold-violation'; tr.appendChild(tdLast);
+      const tdAvg = document.createElement('td'); tdAvg.textContent = m.summary && m.summary.RATING_AVG!=null? Math.floor(m.summary.RATING_AVG) : '—'; if(violations.RATING_AVG) tdAvg.className='bold-violation'; tr.appendChild(tdAvg);
+      const tdMax = document.createElement('td'); tdMax.textContent = m.summary && m.summary.RATING_MAX!=null? m.summary.RATING_MAX : '—'; if(violations.RATING_MAX) tdMax.className='bold-violation'; tr.appendChild(tdMax);
+      const tdToggle = document.createElement('td');
+      if(hasAlts){
+        const btn = document.createElement('button'); btn.textContent='Toggle alts'; btn.className='toggle-btn'; const ownerKey = `owner-${encodeURIComponent(m.staticLegacy || (m.accountId+'-'+m.characterId))}`; btn.addEventListener('click', ()=>{ toggleAltGroup(ownerKey); }); tdToggle.appendChild(btn);
+      }
+      tr.appendChild(tdToggle);
+      return tr; }
+
+    function buildAltRow(alt, main, ownerKey){ const tr = document.createElement('tr'); tr.className='alt-row'; tr.dataset.account = alt.accountId; tr.dataset.owner = ownerKey; tr.style.display = 'none'; const isViolation = Object.values(checkViolationsGlobal(alt, true)).some(Boolean);
+      const tdMode = document.createElement('td'); tdMode.textContent = alt.staticLegacy? queueIdToModeLabel(alt.staticLegacy.split('-')[0]) : ''; tr.appendChild(tdMode);
+      const tdRegion = document.createElement('td'); tdRegion.textContent = regionToFlagEmoji(alt.region); tr.appendChild(tdRegion);
+      const tdTag = document.createElement('td'); const a = document.createElement('a'); a.textContent = alt.tag || (alt.characterId? String(alt.characterId): ''); if(alt.characterId){ a.href = `https://sc2pulse.nephest.com/sc2/?type=character&id=${alt.characterId}&m=1`; a.target='_blank'; a.rel='noopener'; } if(isViolation) a.className='tag-error'; tdTag.appendChild(a); tr.appendChild(tdTag);
+      const tdRace = document.createElement('td'); const raceSrc = raceIconSrc(alt.race); if(raceSrc){ const img = document.createElement('img'); img.className='race-icon'; img.src = raceSrc; img.alt = alt.race; tdRace.appendChild(img); } tdRace.appendChild(document.createTextNode(alt.race || '')); tr.appendChild(tdRace);
+      const tdGames = document.createElement('td'); tdGames.textContent = alt.summary && alt.summary.GAMES!=null? alt.summary.GAMES : '—'; tdGames.className='alt-games'; tr.appendChild(tdGames);
+      const tdLast = document.createElement('td'); tdLast.textContent = alt.summary && alt.summary.RATING_LAST!=null? alt.summary.RATING_LAST : '—'; if(checkViolationsGlobal(alt,true).RATING_LAST) tdLast.className='bold-violation'; tr.appendChild(tdLast);
+      const tdAvg = document.createElement('td'); tdAvg.textContent = alt.summary && alt.summary.RATING_AVG!=null? Math.floor(alt.summary.RATING_AVG) : '—'; if(checkViolationsGlobal(alt,true).RATING_AVG) tdAvg.className='bold-violation'; tr.appendChild(tdAvg);
+      const tdMax = document.createElement('td'); tdMax.textContent = alt.summary && alt.summary.RATING_MAX!=null? alt.summary.RATING_MAX : '—'; if(checkViolationsGlobal(alt,true).RATING_MAX) tdMax.className='bold-violation'; tr.appendChild(tdMax);
+      const tdEmpty = document.createElement('td'); tr.appendChild(tdEmpty);
+      if(isViolation) tr.style.display='table-row';
+      return tr; }
+
+    function toggleAltGroup(ownerKey){ const rows = Array.from($('#mainTable tbody').querySelectorAll(`tr[data-owner="${ownerKey}"]`)); for(const r of rows){ const isViolation = r.querySelectorAll('.bold-violation, .tag-error').length>0; if(isViolation){ r.style.display='table-row'; } else { r.style.display = (r.style.display==='none' || r.style.display==='')? 'table-row':'none'; } } }
+
+    function wireUI(){ STATE.el.state = document.getElementById('stateIndicator'); STATE.el.okErr = document.getElementById('okErr'); STATE.el.mainTable = document.getElementById('mainTable'); // init inputs from URL
+      setInputFromTeamLegacyParam(); const p = new URLSearchParams(window.location.search); if(p.has('queue')){ const q = p.get('queue').split(','); const sel = document.getElementById('queue'); Array.from(sel.options).forEach(opt=> opt.selected = q.includes(opt.value)); } ['gamesMin','gamesMax','lastMin','lastMax','avgMin','avgMax','maxMin','maxMax','from','tzOffset','depth'].forEach(k=>{ if(p.has(k)) document.getElementById(k).value = p.get(k); });
+
+      // teamLegacy input -> sync URL and retrigger (serialized)
+      document.getElementById('teamLegacyInput').addEventListener('input', ()=>{ setTeamLegacyParamFromInput(); scheduleRunWorkflowDebounced(); });
+
+      ['gamesMin','gamesMax','lastMin','lastMax','avgMin','avgMax','maxMin','maxMax'].forEach(id=>{ document.getElementById(id).addEventListener('input', ()=>{ syncInputsToQuery(); setStateText('Revalidating data'); enqueue(()=>revalidateAndRender()); }); });
+
+      ['queue','from'].forEach(id=>{ document.getElementById(id).addEventListener('change', ()=>{ syncInputsToQuery(); scheduleRunWorkflowDebounced(); }); });
+      // For tzOffset and depth, validate constraints first; do NOT retrigger workflow if invalid
+      ['tzOffset','depth'].forEach(id=>{ document.getElementById(id).addEventListener('input', ()=>{ syncInputsToQuery(); const v = validateTzDepthInputs(); if(!v.ok){ setStateText('Invalid input','err'); setOkErr(v.message,false); return; } // valid -> run workflow
+        scheduleRunWorkflowDebounced(); }); });
+      $$('#mainTable thead th').forEach(th=>{ th.addEventListener('click', ()=>{ const key = th.dataset.key; if(!key || key==='toggle') return; if(STATE.SORT.key === key){ STATE.SORT.dir = -STATE.SORT.dir; } else { STATE.SORT.key = (key==='race'?'race': key); STATE.SORT.dir = -1; } sortAndRender(); }); });
+    }
+
+    function syncInputsToQuery(){ const params = new URLSearchParams(window.location.search); const queues = Array.from(document.getElementById('queue').selectedOptions).map(o=>o.value); if(queues.length) params.set('queue', queues.join(',')); else params.delete('queue'); ['gamesMin','gamesMax','lastMin','lastMax','avgMin','avgMax','maxMin','maxMax','from','tzOffset','depth'].forEach(k=>{ const v=document.getElementById(k).value; if(v==='') params.delete(k); else params.set(k,v); }); history.replaceState(null,'',window.location.pathname+'?'+params.toString()); }
+
+    function revalidateAndRender(){ if(!STATE.data.rows || STATE.data.rows.length===0){ setStateText('No data to revalidate','err'); return Promise.resolve(); } renderTable(); const provided = parseProvidedLegacyUids(); const mainRows = STATE.data.rows.filter(r => r.staticLegacy && provided.includes(r.staticLegacy)); const anyViolations = STATE.data.rows.some(r=>{ const isAlt = !mainRows.includes(r); const v = checkViolationsGlobal(r,isAlt); return Object.values(v).some(Boolean); }); if(anyViolations){ setOkErr('Verification errors found', false); setStateText('Completed with errors','err'); } else { setOkErr('OK', true); setStateText('Completed','ok'); } return Promise.resolve(); }
+
+    document.addEventListener('DOMContentLoaded', ()=>{ wireUI(); enqueue(()=>runWorkflow()); });
+</script>
+</body>
+</html>
